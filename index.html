@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Chasers – Collection Log Timeline</title>
+  <style>
+    :root {
+      --bg: #111318;
+      --surface: #1a1d26;
+      --surface2: #222638;
+      --border: #2a2e42;
+      --accent: #e94560;
+      --text: #dde1f0;
+      --muted: #6b7299;
+      --green: #4cbe7e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+    header .meta { color: var(--muted); font-size: 12px; }
+
+    /* Layout */
+    .layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* Left panel */
+    .left-panel {
+      width: 280px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 9px 0;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .tab-btn.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+    .panel-body { overflow-y: auto; flex: 1; }
+
+    /* Search */
+    .search-wrap { padding: 8px; border-bottom: 1px solid var(--border); }
+    .search-wrap input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 9px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .search-wrap input:focus { border-color: var(--accent); }
+
+    /* Run entries */
+    .run-entry { border-bottom: 1px solid var(--border); }
+    .run-header {
+      padding: 9px 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .run-header:hover { background: var(--surface2); }
+    .run-date { font-size: 13px; }
+    .run-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .run-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 0 12px 9px;
+    }
+    .chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 2px 7px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .chip:hover { background: var(--accent); border-color: var(--accent); }
+
+    /* Member list */
+    .member-row {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .member-row:hover { background: var(--surface2); }
+    .member-row.active { background: var(--surface2); border-left: 2px solid var(--accent); }
+    .member-row-name { font-size: 13px; }
+    .member-row-date { font-size: 11px; color: var(--muted); }
+
+    /* Right panel */
+    .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .placeholder {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* Member detail */
+    .detail-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 18px;
+      flex-shrink: 0;
+    }
+    .detail-header h2 { font-size: 15px; font-weight: 600; }
+    .detail-header .detail-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .detail-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* Snapshot picker */
+    .snap-picker {
+      width: 230px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .snap-picker-head {
+      display: grid;
+      grid-template-columns: 28px 28px 1fr auto;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .snap-list { overflow-y: auto; flex: 1; }
+    .snap-row {
+      display: grid;
+      grid-template-columns: 28px 28px 1fr auto;
+      align-items: center;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .snap-row:hover { background: var(--surface2); }
+    .snap-row input[type=radio] { accent-color: var(--accent); cursor: pointer; }
+    .snap-badge { color: var(--green); font-size: 11px; font-weight: 600; }
+    .compare-wrap { padding: 8px 10px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .compare-btn {
+      width: 100%;
+      padding: 7px 0;
+      background: var(--accent);
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .compare-btn:disabled {
+      background: var(--border);
+      color: var(--muted);
+      cursor: default;
+    }
+
+    /* Comparison area */
+    .cmp-area { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .cmp-heading {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      letter-spacing: 0.02em;
+    }
+    .cmp-heading strong { color: var(--text); }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    tr:hover td { background: var(--surface); }
+    .td-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .delta { color: var(--green); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+    .empty-msg { color: var(--muted); font-size: 13px; text-align: center; padding: 32px 0; }
+
+    .loading { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  </style>
+</head>
+<body>
+<header>
+  <h1 id="group-name">Loading…</h1>
+  <span class="meta" id="header-meta"></span>
+</header>
+<div class="layout">
+  <div class="left-panel">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-timeline" onclick="switchTab('timeline')">Timeline</button>
+      <button class="tab-btn" id="tab-members" onclick="switchTab('members')">Members</button>
+    </div>
+    <div class="panel-body" id="panel-body">
+      <div class="loading">Loading…</div>
+    </div>
+  </div>
+  <div class="right-panel" id="right-panel">
+    <div class="placeholder">Select a member to view their snapshot history</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+let itemNames = {};
+let clanHistory = null;
+let currentTab = 'timeline';
+let selectedMember = null;
+let memberData = null;
+let snapBefore = null;
+let snapAfter = null;
+let memberSearch = '';
+// Built from clan_history: { player -> { lastActive: timestamp | null } }
+let memberIndex = {};
+
+async function init() {
+  try {
+    [itemNames, clanHistory] = await Promise.all([
+      fetch('data/items.json').then(r => r.json()),
+      fetch('data/clan_history.json').then(r => r.json()),
+    ]);
+  } catch (e) {
+    document.getElementById('group-name').textContent = 'Failed to load data';
+    return;
+  }
+
+  document.getElementById('group-name').textContent = clanHistory.group_name;
+  document.getElementById('header-meta').textContent =
+    `${clanHistory.runs.length} snapshot${clanHistory.runs.length !== 1 ? 's' : ''}`;
+
+  buildMemberIndex();
+  renderTab();
+}
+
+function buildMemberIndex() {
+  memberIndex = {};
+  for (const run of clanHistory.runs) {
+    for (const p of (run.members_added || [])) {
+      if (!memberIndex[p]) memberIndex[p] = { lastActive: null };
+    }
+    for (const p of Object.keys(run.member_deltas || {})) {
+      if (!memberIndex[p]) memberIndex[p] = { lastActive: null };
+      memberIndex[p].lastActive = run.timestamp;
+    }
+  }
+}
+
+function parseTs(ts) {
+  return new Date(ts.replace(/T(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3'));
+}
+
+function fmtDate(ts) {
+  return parseTs(ts).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-timeline').classList.toggle('active', tab === 'timeline');
+  document.getElementById('tab-members').classList.toggle('active', tab === 'members');
+  renderTab();
+}
+
+function renderTab() {
+  if (currentTab === 'timeline') renderTimeline();
+  else renderMemberList();
+}
+
+function renderTimeline() {
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '';
+  const runs = [...clanHistory.runs].reverse();
+  for (const run of runs) {
+    const changedPlayers = Object.keys(run.member_deltas || {});
+    const added = (run.members_added || []).length;
+    const removed = (run.members_removed || []).length;
+
+    const entry = document.createElement('div');
+    entry.className = 'run-entry';
+
+    const header = document.createElement('div');
+    header.className = 'run-header';
+    header.innerHTML = `
+      <div class="run-date">${fmtDate(run.timestamp)}</div>
+      <div class="run-sub">${changedPlayers.length} member${changedPlayers.length !== 1 ? 's' : ''} with changes${added ? ` · +${added} joined` : ''}${removed ? ` · −${removed} left` : ''}</div>
+    `;
+
+    const chips = document.createElement('div');
+    chips.className = 'run-chips';
+    chips.style.display = 'none';
+
+    header.addEventListener('click', () => {
+      const open = chips.style.display !== 'none';
+      chips.style.display = open ? 'none' : 'flex';
+      if (!open && chips.children.length === 0) {
+        for (const p of changedPlayers) {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = memberIndex[p]
+            ? (memberData?.display_name && selectedMember === p ? memberData.display_name : p)
+            : p;
+          chip.addEventListener('click', e => { e.stopPropagation(); openMember(p); });
+          chips.appendChild(chip);
+        }
+      }
+    });
+
+    entry.appendChild(header);
+    entry.appendChild(chips);
+    body.appendChild(entry);
+  }
+}
+
+function renderMemberList() {
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '';
+
+  const searchWrap = document.createElement('div');
+  searchWrap.className = 'search-wrap';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Search members…';
+  input.value = memberSearch;
+  input.addEventListener('input', e => { memberSearch = e.target.value; renderMemberRows(listEl); });
+  searchWrap.appendChild(input);
+  body.appendChild(searchWrap);
+
+  const listEl = document.createElement('div');
+  body.appendChild(listEl);
+  renderMemberRows(listEl);
+}
+
+function renderMemberRows(container) {
+  container.innerHTML = '';
+  const filter = memberSearch.toLowerCase();
+  const players = Object.keys(memberIndex)
+    .filter(p => p.includes(filter))
+    .sort((a, b) => {
+      const ta = memberIndex[a].lastActive || '';
+      const tb = memberIndex[b].lastActive || '';
+      return tb.localeCompare(ta) || a.localeCompare(b);
+    });
+
+  for (const player of players) {
+    const row = document.createElement('div');
+    row.className = 'member-row' + (selectedMember === player ? ' active' : '');
+    row.innerHTML = `
+      <span class="member-row-name">${player}</span>
+      <span class="member-row-date">${memberIndex[player].lastActive ? fmtDate(memberIndex[player].lastActive) : '—'}</span>
+    `;
+    row.addEventListener('click', () => openMember(player));
+    container.appendChild(row);
+  }
+}
+
+async function openMember(player) {
+  selectedMember = player;
+  snapBefore = null;
+  snapAfter = null;
+  memberData = null;
+
+  const panel = document.getElementById('right-panel');
+  panel.innerHTML = '<div class="loading">Loading…</div>';
+
+  try {
+    memberData = await fetch(`data/members/${encodeURIComponent(player)}.json`).then(r => {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    });
+  } catch {
+    panel.innerHTML = '<div class="placeholder">Failed to load member data.</div>';
+    return;
+  }
+
+  if (currentTab === 'members') {
+    document.querySelectorAll('.member-row').forEach(el => {
+      el.classList.toggle('active', el.querySelector('.member-row-name').textContent === player);
+    });
+  }
+
+  renderDetail();
+}
+
+function renderDetail() {
+  const panel = document.getElementById('right-panel');
+  const displayName = memberData.display_name || selectedMember;
+  const snaps = memberData.snapshots;
+
+  panel.innerHTML = `
+    <div class="detail-header">
+      <h2>${displayName}</h2>
+      <div class="detail-meta">${snaps.length} snapshot${snaps.length !== 1 ? 's' : ''} · select Before and After to compare</div>
+    </div>
+    <div class="detail-body">
+      <div class="snap-picker">
+        <div class="snap-picker-head">
+          <span>Bef</span><span>Aft</span><span>Date</span><span></span>
+        </div>
+        <div class="snap-list" id="snap-list"></div>
+        <div class="compare-wrap">
+          <button class="compare-btn" id="compare-btn" disabled onclick="renderComparison()">Compare</button>
+        </div>
+      </div>
+      <div class="cmp-area" id="cmp-area">
+        <div class="empty-msg">Choose two snapshots and click Compare</div>
+      </div>
+    </div>
+  `;
+
+  renderSnapList();
+}
+
+function renderSnapList() {
+  const list = document.getElementById('snap-list');
+  list.innerHTML = '';
+  const snaps = memberData.snapshots;
+
+  // Most recent first
+  const reversed = snaps.map((s, i) => ({ ...s, idx: i })).reverse();
+
+  for (const { timestamp, idx } of reversed) {
+    // Count items gained vs previous snapshot
+    let badge = '';
+    if (idx > 0) {
+      const prev = snaps[idx - 1].items;
+      const curr = snaps[idx].items;
+      let gained = 0;
+      for (const [id, cnt] of Object.entries(curr)) {
+        if (cnt > (prev[id] || 0)) gained++;
+      }
+      if (gained > 0) badge = `+${gained}`;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'snap-row';
+    row.innerHTML = `
+      <input type="radio" name="snap-bef" value="${idx}">
+      <input type="radio" name="snap-aft" value="${idx}">
+      <span>${fmtDate(timestamp)}</span>
+      <span class="snap-badge">${badge}</span>
+    `;
+    const [rBef, rAft] = row.querySelectorAll('input');
+    rBef.addEventListener('change', () => { snapBefore = idx; updateCompareBtn(); });
+    rAft.addEventListener('change', () => { snapAfter = idx; updateCompareBtn(); });
+    list.appendChild(row);
+  }
+}
+
+function updateCompareBtn() {
+  const btn = document.getElementById('compare-btn');
+  if (btn) btn.disabled = snapBefore === null || snapAfter === null || snapBefore === snapAfter;
+}
+
+function renderComparison() {
+  if (snapBefore === null || snapAfter === null || snapBefore === snapAfter) return;
+
+  const loIdx = Math.min(snapBefore, snapAfter);
+  const hiIdx = Math.max(snapBefore, snapAfter);
+  const before = memberData.snapshots[loIdx];
+  const after = memberData.snapshots[hiIdx];
+
+  const allIds = new Set([...Object.keys(before.items), ...Object.keys(after.items)]);
+  const rows = [];
+  for (const id of allIds) {
+    const b = before.items[id] || 0;
+    const a = after.items[id] || 0;
+    if (a !== b) rows.push({ id, name: itemNames[id] || `Item #${id}`, b, a, delta: a - b });
+  }
+  rows.sort((a, b) => b.delta - a.delta || a.name.localeCompare(b.name));
+
+  const area = document.getElementById('cmp-area');
+  if (rows.length === 0) {
+    area.innerHTML = '<div class="empty-msg">No item changes between these snapshots.</div>';
+    return;
+  }
+
+  area.innerHTML = `
+    <div class="cmp-heading">
+      <strong>${fmtDate(before.timestamp)}</strong>
+      <span> → </span>
+      <strong>${fmtDate(after.timestamp)}</strong>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th style="text-align:right">Before</th>
+          <th style="text-align:right">After</th>
+          <th style="text-align:right">+/−</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td>${r.name}</td>
+            <td class="td-num">${r.b}</td>
+            <td class="td-num">${r.a}</td>
+            <td class="delta">${r.delta > 0 ? '+' : ''}${r.delta}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+init();
+</script>
+</body>
+</html>

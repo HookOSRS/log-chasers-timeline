@@ -1,0 +1,10 @@
+{
+  "name": "log-chasers-timeline",
+  "version": "1.0.0",
+  "scripts": {
+    "download": "node download.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
