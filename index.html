@@ -333,6 +333,8 @@ function renderTimeline() {
     const added = (run.members_added || []).length;
     const removed = (run.members_removed || []).length;
 
+    if (changedPlayers.length === 0 && added === 0 && removed === 0) continue;
+
     const entry = document.createElement('div');
     entry.className = 'run-entry';
 
@@ -357,7 +359,7 @@ function renderTimeline() {
           chip.textContent = memberIndex[p]
             ? (memberData?.display_name && selectedMember === p ? memberData.display_name : p)
             : p;
-          chip.addEventListener('click', e => { e.stopPropagation(); openMember(p); });
+          chip.addEventListener('click', e => { e.stopPropagation(); openMember(p, run.timestamp); });
           chips.appendChild(chip);
         }
       }
@@ -411,7 +413,7 @@ function renderMemberRows(container) {
   }
 }
 
-async function openMember(player) {
+async function openMember(player, targetTimestamp = null) {
   selectedMember = player;
   snapBefore = null;
   snapAfter = null;
@@ -421,13 +423,21 @@ async function openMember(player) {
   panel.innerHTML = '<div class="loading">Loading…</div>';
 
   try {
-    memberData = await fetch(`data/members/${encodeURIComponent(player)}.json`).then(r => {
+    memberData = await fetch(`data/members/${encodeURIComponent(player)}.json?v=${Date.now()}`).then(r => {
       if (!r.ok) throw new Error(r.status);
       return r.json();
     });
   } catch {
     panel.innerHTML = '<div class="placeholder">Failed to load member data.</div>';
     return;
+  }
+
+  if (targetTimestamp) {
+    const idx = memberData.snapshots.findIndex(s => s.timestamp === targetTimestamp);
+    if (idx > 0) {
+      snapBefore = idx - 1;
+      snapAfter = idx;
+    }
   }
 
   if (currentTab === 'members') {
@@ -437,6 +447,13 @@ async function openMember(player) {
   }
 
   renderDetail();
+
+  if (snapBefore !== null && snapAfter !== null) {
+    document.querySelector(`input[name="snap-bef"][value="${snapBefore}"]`).checked = true;
+    document.querySelector(`input[name="snap-aft"][value="${snapAfter}"]`).checked = true;
+    updateCompareBtn();
+    renderComparison();
+  }
 }
 
 function renderDetail() {
