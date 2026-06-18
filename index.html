@@ -394,7 +394,7 @@ function renderMemberRows(container) {
   container.innerHTML = '';
   const filter = memberSearch.toLowerCase();
   const players = Object.keys(memberIndex)
-    .filter(p => p.includes(filter))
+    .filter(p => p.toLowerCase().includes(filter))
     .sort((a, b) => {
       const ta = memberIndex[a].lastActive || '';
       const tb = memberIndex[b].lastActive || '';
