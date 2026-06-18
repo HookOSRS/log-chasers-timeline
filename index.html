@@ -248,6 +248,78 @@
     .empty-msg { color: var(--muted); font-size: 13px; text-align: center; padding: 32px 0; }
 
     .loading { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+
+    .run-entry.active .run-header { border-left: 2px solid var(--accent); background: var(--surface2); }
+
+    .overview-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 18px;
+      flex-shrink: 0;
+    }
+    .overview-body { overflow-y: auto; flex: 1; padding: 4px 0; }
+    .overview-section { padding: 12px 18px; border-bottom: 1px solid var(--border); }
+    .overview-section-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .item-summary { display: flex; flex-wrap: wrap; gap: 5px; }
+    .item-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 12px;
+      cursor: default;
+      user-select: none;
+    }
+    .item-chip:hover { border-color: var(--muted); }
+
+    .item-list { display: flex; flex-direction: column; gap: 1px; }
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px;
+      border-radius: 3px;
+      cursor: default;
+      font-size: 13px;
+    }
+    .item-row:hover { background: var(--surface2); }
+    .item-row-name { color: var(--text); }
+    .item-row-count { color: var(--muted); font-size: 12px; margin-left: 12px; flex-shrink: 0; }
+
+    #tooltip {
+      position: fixed;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 7px 11px;
+      font-size: 11px;
+      line-height: 1.7;
+      color: var(--text);
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      white-space: pre;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .back-btn:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -266,9 +338,10 @@
     </div>
   </div>
   <div class="right-panel" id="right-panel">
-    <div class="placeholder">Select a member to view their snapshot history</div>
+    <div class="placeholder">Select a snapshot or member to get started</div>
   </div>
 </div>
+<div id="tooltip"></div>
 
 <script>
 'use strict';
@@ -281,6 +354,7 @@ let memberData = null;
 let snapBefore = null;
 let snapAfter = null;
 let memberSearch = '';
+let currentRun = null;
 // Built from clan_history: { player -> { lastActive: timestamp | null } }
 let memberIndex = {};
 
@@ -297,8 +371,9 @@ async function init() {
   }
 
   document.getElementById('group-name').textContent = clanHistory.group_name;
+  const visibleCount = clanHistory.runs.filter(r => Object.keys(r.member_deltas || {}).length > 0).length;
   document.getElementById('header-meta').textContent =
-    `${clanHistory.runs.length} snapshot${clanHistory.runs.length !== 1 ? 's' : ''}`;
+    `${visibleCount} snapshot${visibleCount !== 1 ? 's' : ''}`;
 
   buildMemberIndex();
   renderTab();
@@ -353,6 +428,7 @@ function renderTimeline() {
 
     const entry = document.createElement('div');
     entry.className = 'run-entry';
+    entry.dataset.ts = run.timestamp;
 
     const header = document.createElement('div');
     header.className = 'run-header';
@@ -361,30 +437,116 @@ function renderTimeline() {
       <div class="run-sub">${changedPlayers.length} member${changedPlayers.length !== 1 ? 's' : ''} with changes${added ? ` · +${added} joined` : ''}${removed ? ` · −${removed} left` : ''}</div>
     `;
 
-    const chips = document.createElement('div');
-    chips.className = 'run-chips';
-    chips.style.display = 'none';
-
     header.addEventListener('click', () => {
-      const open = chips.style.display !== 'none';
-      chips.style.display = open ? 'none' : 'flex';
-      if (!open && chips.children.length === 0) {
-        for (const p of changedPlayers) {
-          const chip = document.createElement('span');
-          chip.className = 'chip';
-          chip.textContent = memberIndex[p]
-            ? (memberData?.display_name && selectedMember === p ? memberData.display_name : p)
-            : p;
-          chip.addEventListener('click', e => { e.stopPropagation(); openMember(p, run.timestamp); });
-          chips.appendChild(chip);
-        }
-      }
+      document.querySelectorAll('.run-entry').forEach(el => el.classList.remove('active'));
+      entry.classList.add('active');
+      renderRunOverview(run);
     });
 
     entry.appendChild(header);
-    entry.appendChild(chips);
     body.appendChild(entry);
   }
+}
+
+function buildItemSummary(memberDeltas) {
+  const map = {};
+  for (const [player, deltas] of Object.entries(memberDeltas)) {
+    for (const [itemId, gain] of Object.entries(deltas)) {
+      if (!map[itemId]) map[itemId] = { total: 0, players: [] };
+      map[itemId].total += gain;
+      map[itemId].players.push({ name: player, gain });
+    }
+  }
+  return Object.entries(map)
+    .map(([itemId, d]) => ({ itemId, name: itemNames[itemId] || `Item #${itemId}`, ...d }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function showTooltip(e, text) { const t = document.getElementById('tooltip'); t.textContent = text; t.style.display = 'block'; moveTooltip(e); }
+function moveTooltip(e) { const t = document.getElementById('tooltip'); t.style.left = (e.clientX + 14) + 'px'; t.style.top = (e.clientY - 10) + 'px'; }
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+function renderRunOverview(run) {
+  currentRun = run;
+  const changedPlayers = Object.keys(run.member_deltas || {});
+  const added = (run.members_added || []).length;
+  const removed = (run.members_removed || []).length;
+  const itemSummary = buildItemSummary(run.member_deltas || {});
+
+  const panel = document.getElementById('right-panel');
+  panel.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'overview-header';
+  hdr.innerHTML = `
+    <div style="font-size:15px;font-weight:600">${fmtDate(run.timestamp)}</div>
+    <div class="run-sub" style="margin-top:4px">${changedPlayers.length} member${changedPlayers.length !== 1 ? 's' : ''} with changes${added ? ` · +${added} joined` : ''}${removed ? ` · −${removed} left` : ''}</div>
+  `;
+  panel.appendChild(hdr);
+
+  const body = document.createElement('div');
+  body.className = 'overview-body';
+
+  if (changedPlayers.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'overview-section';
+    sec.innerHTML = '<div class="overview-section-title">Members</div>';
+    const chips = document.createElement('div');
+    chips.className = 'item-summary';
+    for (const p of changedPlayers) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = p;
+      chip.addEventListener('click', () => openMember(p, run.timestamp));
+      chips.appendChild(chip);
+    }
+    sec.appendChild(chips);
+    body.appendChild(sec);
+  }
+
+  for (const [title, players, clickable] of [
+    ['Joined', run.members_added || [], true],
+    ['Left',   run.members_removed || [], false],
+  ]) {
+    if (players.length === 0) continue;
+    const sec = document.createElement('div');
+    sec.className = 'overview-section';
+    sec.innerHTML = `<div class="overview-section-title">${title}</div>`;
+    const chips = document.createElement('div');
+    chips.className = 'item-summary';
+    for (const p of players) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = p;
+      if (clickable) chip.addEventListener('click', () => openMember(p));
+      else chip.style.cursor = 'default';
+      chips.appendChild(chip);
+    }
+    sec.appendChild(chips);
+    body.appendChild(sec);
+  }
+
+  if (itemSummary.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'overview-section';
+    sec.innerHTML = '<div class="overview-section-title">Items gained</div>';
+    const list = document.createElement('div');
+    list.className = 'item-list';
+    for (const item of itemSummary) {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      row.innerHTML = `<span class="item-row-name">${item.name}</span><span class="item-row-count">×${item.total}</span>`;
+      const tipText = item.players.sort((a, b) => b.gain - a.gain).map(p => `${p.name}: +${p.gain}`).join('\n');
+      row.addEventListener('mouseenter', e => showTooltip(e, tipText));
+      row.addEventListener('mousemove', moveTooltip);
+      row.addEventListener('mouseleave', hideTooltip);
+      list.appendChild(row);
+    }
+    sec.appendChild(list);
+    body.appendChild(sec);
+  }
+
+  panel.appendChild(body);
 }
 
 function renderMemberList() {
@@ -502,6 +664,7 @@ function renderDetail() {
 
   panel.innerHTML = `
     <div class="detail-header">
+      ${currentRun ? `<button class="back-btn" onclick="renderRunOverview(currentRun)">← Overview</button>` : ''}
       <h2>${displayName}</h2>
       <div class="detail-meta">${snaps.length} snapshot${snaps.length !== 1 ? 's' : ''} · select Before and After to compare</div>
     </div>

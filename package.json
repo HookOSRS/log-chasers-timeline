@@ -2,6 +2,7 @@
   "name": "log-chasers-timeline",
   "version": "1.0.0",
   "scripts": {
+    "start": "npx serve .",
     "download": "node download.js"
   },
   "engines": {
