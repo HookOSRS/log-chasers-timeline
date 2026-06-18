@@ -80,17 +80,33 @@
 
     /* Search */
     .search-wrap { padding: 8px; border-bottom: 1px solid var(--border); }
+    .search-wrap { position: relative; }
     .search-wrap input {
       width: 100%;
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 4px;
-      padding: 5px 9px;
+      padding: 5px 28px 5px 9px;
       color: var(--text);
       font-size: 13px;
       outline: none;
     }
     .search-wrap input:focus { border-color: var(--accent); }
+    .search-clear {
+      position: absolute;
+      right: 7px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1;
+      padding: 0;
+      display: none;
+    }
+    .search-clear:hover { color: var(--text); }
 
     /* Run entries */
     .run-entry { border-bottom: 1px solid var(--border); }
@@ -381,8 +397,25 @@ function renderMemberList() {
   input.type = 'text';
   input.placeholder = 'Search members…';
   input.value = memberSearch;
-  input.addEventListener('input', e => { memberSearch = e.target.value; renderMemberRows(listEl); });
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'search-clear';
+  clearBtn.textContent = '×';
+  clearBtn.title = 'Clear search';
+  clearBtn.style.display = memberSearch ? 'block' : 'none';
+  clearBtn.addEventListener('click', () => {
+    memberSearch = '';
+    input.value = '';
+    clearBtn.style.display = 'none';
+    renderMemberRows(listEl);
+    input.focus();
+  });
+  input.addEventListener('input', e => {
+    memberSearch = e.target.value;
+    clearBtn.style.display = memberSearch ? 'block' : 'none';
+    renderMemberRows(listEl);
+  });
   searchWrap.appendChild(input);
+  searchWrap.appendChild(clearBtn);
   body.appendChild(searchWrap);
 
   const listEl = document.createElement('div');
