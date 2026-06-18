@@ -438,6 +438,12 @@ async function openMember(player, targetTimestamp = null) {
       snapBefore = idx - 1;
       snapAfter = idx;
     }
+  } else {
+    const last = memberData.snapshots.length - 1;
+    if (last > 0) {
+      snapBefore = last - 1;
+      snapAfter = last;
+    }
   }
 
   if (currentTab === 'members') {
