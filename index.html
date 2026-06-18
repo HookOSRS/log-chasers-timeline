@@ -270,9 +270,10 @@ let memberIndex = {};
 
 async function init() {
   try {
-    [itemNames, clanHistory] = await Promise.all([
-      fetch('data/items.json').then(r => r.json()),
-      fetch('data/clan_history.json').then(r => r.json()),
+    const v = Date.now();
+  [itemNames, clanHistory] = await Promise.all([
+      fetch(`data/items.json?v=${v}`).then(r => r.json()),
+      fetch(`data/clan_history.json?v=${v}`).then(r => r.json()),
     ]);
   } catch (e) {
     document.getElementById('group-name').textContent = 'Failed to load data';
