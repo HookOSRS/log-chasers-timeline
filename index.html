@@ -349,7 +349,7 @@ function renderTimeline() {
     const added = (run.members_added || []).length;
     const removed = (run.members_removed || []).length;
 
-    if (changedPlayers.length === 0 && added === 0 && removed === 0) continue;
+    if (changedPlayers.length === 0) continue;
 
     const entry = document.createElement('div');
     entry.className = 'run-entry';
