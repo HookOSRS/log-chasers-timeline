@@ -355,6 +355,7 @@ let snapBefore = null;
 let snapAfter = null;
 let memberSearch = '';
 let currentRun = null;
+let currentPrevRun = null;
 // Built from clan_history: { player -> { lastActive: timestamp | null } }
 let memberIndex = {};
 
@@ -418,8 +419,10 @@ function renderTab() {
 function renderTimeline() {
   const body = document.getElementById('panel-body');
   body.innerHTML = '';
-  const runs = [...clanHistory.runs].reverse();
-  for (const run of runs) {
+  const allRuns = clanHistory.runs;
+  for (let i = allRuns.length - 1; i >= 0; i--) {
+    const run = allRuns[i];
+    const prevRun = i > 0 ? allRuns[i - 1] : null;
     const changedPlayers = Object.keys(run.member_deltas || {});
     const added = (run.members_added || []).length;
     const removed = (run.members_removed || []).length;
@@ -440,7 +443,7 @@ function renderTimeline() {
     header.addEventListener('click', () => {
       document.querySelectorAll('.run-entry').forEach(el => el.classList.remove('active'));
       entry.classList.add('active');
-      renderRunOverview(run);
+      renderRunOverview(run, prevRun);
     });
 
     entry.appendChild(header);
@@ -466,8 +469,9 @@ function showTooltip(e, text) { const t = document.getElementById('tooltip'); t.
 function moveTooltip(e) { const t = document.getElementById('tooltip'); t.style.left = (e.clientX + 14) + 'px'; t.style.top = (e.clientY - 10) + 'px'; }
 function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
 
-function renderRunOverview(run) {
+function renderRunOverview(run, prevRun = null) {
   currentRun = run;
+  currentPrevRun = prevRun;
   const changedPlayers = Object.keys(run.member_deltas || {});
   const added = (run.members_added || []).length;
   const removed = (run.members_removed || []).length;
@@ -476,10 +480,14 @@ function renderRunOverview(run) {
   const panel = document.getElementById('right-panel');
   panel.innerHTML = '';
 
+  const dateLabel = prevRun
+    ? `${fmtDate(prevRun.timestamp)} → ${fmtDate(run.timestamp)}`
+    : fmtDate(run.timestamp);
+
   const hdr = document.createElement('div');
   hdr.className = 'overview-header';
   hdr.innerHTML = `
-    <div style="font-size:15px;font-weight:600">${fmtDate(run.timestamp)}</div>
+    <div style="font-size:15px;font-weight:600">${dateLabel}</div>
     <div class="run-sub" style="margin-top:4px">${changedPlayers.length} member${changedPlayers.length !== 1 ? 's' : ''} with changes${added ? ` · +${added} joined` : ''}${removed ? ` · −${removed} left` : ''}</div>
   `;
   panel.appendChild(hdr);
@@ -664,7 +672,7 @@ function renderDetail() {
 
   panel.innerHTML = `
     <div class="detail-header">
-      ${currentRun ? `<button class="back-btn" onclick="renderRunOverview(currentRun)">← Overview</button>` : ''}
+      ${currentRun ? `<button class="back-btn" onclick="renderRunOverview(currentRun, currentPrevRun)">← Overview</button>` : ''}
       <h2>${displayName}</h2>
       <div class="detail-meta">${snaps.length} snapshot${snaps.length !== 1 ? 's' : ''} · select Before and After to compare</div>
     </div>
