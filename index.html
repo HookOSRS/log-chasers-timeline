@@ -332,6 +332,7 @@
     <div class="tabs">
       <button class="tab-btn active" id="tab-timeline" onclick="switchTab('timeline')">Timeline</button>
       <button class="tab-btn" id="tab-members" onclick="switchTab('members')">Members</button>
+      <button class="tab-btn" id="tab-events" onclick="switchTab('events')">Events</button>
     </div>
     <div class="panel-body" id="panel-body">
       <div class="loading">Loading…</div>
@@ -356,6 +357,9 @@ let snapAfter = null;
 let memberSearch = '';
 let currentRun = null;
 let currentPrevRun = null;
+let eventsData = null;
+let eventRunFrom = null;
+let eventRunTo = null;
 // Built from clan_history: { player -> { lastActive: timestamp | null } }
 let memberIndex = {};
 
@@ -408,12 +412,14 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-timeline').classList.toggle('active', tab === 'timeline');
   document.getElementById('tab-members').classList.toggle('active', tab === 'members');
+  document.getElementById('tab-events').classList.toggle('active', tab === 'events');
   renderTab();
 }
 
 function renderTab() {
   if (currentTab === 'timeline') renderTimeline();
-  else renderMemberList();
+  else if (currentTab === 'members') renderMemberList();
+  else renderEventsList();
 }
 
 function renderTimeline() {
@@ -614,6 +620,204 @@ function renderMemberRows(container) {
     row.addEventListener('click', () => openMember(player));
     container.appendChild(row);
   }
+}
+
+async function renderEventsList() {
+  const body = document.getElementById('panel-body');
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  if (!eventsData) {
+    try {
+      eventsData = await fetch(`data/events.json?v=${Date.now()}`).then(r => r.json());
+    } catch {
+      body.innerHTML = '<div class="loading">Failed to load events.</div>';
+      return;
+    }
+  }
+  body.innerHTML = '';
+  for (const event of eventsData.events) {
+    const row = document.createElement('div');
+    row.className = 'member-row';
+    row.innerHTML = `
+      <span class="member-row-name">${event.name}</span>
+      <span class="member-row-date">${fmtShortDate(event.start)} – ${fmtShortDate(event.end)}</span>
+    `;
+    row.addEventListener('click', () => renderEventDetail(event));
+    body.appendChild(row);
+  }
+}
+
+function fmtShortDate(isoStr) {
+  return new Date(isoStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderEventDetail(event) {
+  eventRunFrom = null;
+  eventRunTo = null;
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  const eventRuns = clanHistory.runs.filter(r => {
+    const t = parseTs(r.timestamp);
+    return t >= start && t <= end;
+  });
+
+  const panel = document.getElementById('right-panel');
+  panel.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'overview-header';
+  hdr.innerHTML = `
+    <div style="font-size:15px;font-weight:600">${event.name}</div>
+    ${event.description ? `<div class="run-sub" style="margin-top:3px">${event.description}</div>` : ''}
+    <div class="run-sub" style="margin-top:3px">${fmtShortDate(event.start)} → ${fmtShortDate(event.end)} · ${eventRuns.length} run${eventRuns.length !== 1 ? 's' : ''}</div>
+  `;
+  if (event.players && event.players.length > 0) {
+    const SHOW = 8;
+    const players = event.players;
+    const pWrap = document.createElement('div');
+    pWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:8px';
+
+    const renderChips = (expanded) => {
+      pWrap.innerHTML = '';
+      const visible = expanded ? players : players.slice(0, SHOW);
+      for (const p of visible) {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.style.cursor = 'default';
+        chip.textContent = p;
+        pWrap.appendChild(chip);
+      }
+      if (players.length > SHOW) {
+        const toggle = document.createElement('span');
+        toggle.className = 'chip';
+        toggle.textContent = expanded ? 'Show less' : `+${players.length - SHOW} more`;
+        toggle.addEventListener('click', () => renderChips(!expanded));
+        pWrap.appendChild(toggle);
+      }
+    };
+    renderChips(false);
+    hdr.appendChild(pWrap);
+  }
+  panel.appendChild(hdr);
+
+  if (eventRuns.length < 2) {
+    const msg = document.createElement('div');
+    msg.className = 'empty-msg';
+    msg.style.padding = '32px';
+    msg.textContent = eventRuns.length === 0 ? 'No snapshot runs found in this event period.' : 'Only one run found — need at least two to compare.';
+    panel.appendChild(msg);
+    return;
+  }
+
+  const body = document.createElement('div');
+  body.className = 'detail-body';
+
+  // Run picker
+  const picker = document.createElement('div');
+  picker.className = 'snap-picker';
+  picker.innerHTML = `
+    <div class="snap-picker-head">
+      <span>From</span><span>To</span><span>Date</span><span></span>
+    </div>
+  `;
+  const list = document.createElement('div');
+  list.className = 'snap-list';
+  eventRuns.forEach((run, idx) => {
+    const gained = Object.values(run.member_deltas || {}).reduce((sum, d) => sum + Object.values(d).reduce((a, b) => a + b, 0), 0);
+    const badge = gained > 0 ? `+${gained}` : '';
+    const row = document.createElement('div');
+    row.className = 'snap-row';
+    row.innerHTML = `
+      <input type="radio" name="evt-from" value="${idx}">
+      <input type="radio" name="evt-to" value="${idx}">
+      <span>${fmtDate(run.timestamp)}</span>
+      <span class="snap-badge">${badge}</span>
+    `;
+    const [rFrom, rTo] = row.querySelectorAll('input');
+    rFrom.addEventListener('change', () => { eventRunFrom = idx; updateEventCompareBtn(); });
+    rTo.addEventListener('change', () => { eventRunTo = idx; updateEventCompareBtn(); });
+    list.appendChild(row);
+  });
+  picker.appendChild(list);
+  const wrap = document.createElement('div');
+  wrap.className = 'compare-wrap';
+  const btn = document.createElement('button');
+  btn.className = 'compare-btn';
+  btn.id = 'evt-compare-btn';
+  btn.disabled = true;
+  btn.textContent = 'Compare';
+  btn.addEventListener('click', () => renderEventComparison(eventRuns, eventRunFrom, eventRunTo, event));
+  wrap.appendChild(btn);
+  picker.appendChild(wrap);
+  body.appendChild(picker);
+
+  const cmpArea = document.createElement('div');
+  cmpArea.className = 'cmp-area';
+  cmpArea.id = 'evt-cmp-area';
+  cmpArea.innerHTML = '<div class="empty-msg">Select two runs and click Compare</div>';
+  body.appendChild(cmpArea);
+  panel.appendChild(body);
+
+  // Auto-select first and last run
+  eventRunFrom = 0;
+  eventRunTo = eventRuns.length - 1;
+  list.querySelectorAll('input[name="evt-from"]')[0].checked = true;
+  list.querySelectorAll('input[name="evt-to"]')[eventRuns.length - 1].checked = true;
+  updateEventCompareBtn();
+  renderEventComparison(eventRuns, eventRunFrom, eventRunTo, event);
+}
+
+function updateEventCompareBtn() {
+  const btn = document.getElementById('evt-compare-btn');
+  if (btn) btn.disabled = eventRunFrom === null || eventRunTo === null || eventRunFrom === eventRunTo;
+}
+
+function aggregateDeltas(eventRuns, fromIdx, toIdx, playerFilter) {
+  const lo = Math.min(fromIdx, toIdx);
+  const hi = Math.max(fromIdx, toIdx);
+  const result = {};
+  for (let i = lo + 1; i <= hi; i++) {
+    for (const [player, deltas] of Object.entries(eventRuns[i].member_deltas || {})) {
+      if (playerFilter && !playerFilter.has(player)) continue;
+      for (const [itemId, gain] of Object.entries(deltas)) {
+        if (!result[itemId]) result[itemId] = { total: 0, players: {} };
+        result[itemId].total += gain;
+        result[itemId].players[player] = (result[itemId].players[player] || 0) + gain;
+      }
+    }
+  }
+  return result;
+}
+
+function renderEventComparison(eventRuns, fromIdx, toIdx, event) {
+  const lo = Math.min(fromIdx, toIdx);
+  const hi = Math.max(fromIdx, toIdx);
+  const playerFilter = event.players ? new Set(event.players) : null;
+  const aggregated = aggregateDeltas(eventRuns, lo, hi, playerFilter);
+  const area = document.getElementById('evt-cmp-area');
+
+  const rows = Object.entries(aggregated)
+    .map(([itemId, d]) => ({ name: itemNames[itemId] || `Item #${itemId}`, ...d }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (rows.length === 0) {
+    area.innerHTML = '<div class="empty-msg">No item changes between these runs.</div>';
+    return;
+  }
+
+  area.innerHTML = `<div class="cmp-heading"><strong>${fmtDate(eventRuns[lo].timestamp)}</strong> → <strong>${fmtDate(eventRuns[hi].timestamp)}</strong></div>`;
+  const listEl = document.createElement('div');
+  listEl.className = 'item-list';
+  for (const row of rows) {
+    const el = document.createElement('div');
+    el.className = 'item-row';
+    el.innerHTML = `<span class="item-row-name">${row.name}</span><span class="item-row-count">×${row.total}</span>`;
+    const tipText = Object.entries(row.players).sort((a, b) => b[1] - a[1]).map(([p, n]) => `${p}: +${n}`).join('\n');
+    el.addEventListener('mouseenter', e => showTooltip(e, tipText));
+    el.addEventListener('mousemove', moveTooltip);
+    el.addEventListener('mouseleave', hideTooltip);
+    listEl.appendChild(el);
+  }
+  area.appendChild(listEl);
 }
 
 async function openMember(player, targetTimestamp = null) {
