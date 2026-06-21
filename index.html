@@ -133,6 +133,7 @@
       cursor: pointer;
     }
     .chip:hover { background: var(--accent); border-color: var(--accent); }
+    .chip.active { background: var(--accent); border-color: var(--accent); }
 
     /* Member list */
     .member-row {
@@ -489,7 +490,6 @@ function renderRunOverview(run, prevRun = null) {
   const changedPlayers = Object.keys(run.member_deltas || {});
   const added = (run.members_added || []).length;
   const removed = (run._newlyRemoved || []).length;
-  const itemSummary = buildItemSummary(run.member_deltas || {});
 
   const panel = document.getElementById('right-panel');
   panel.innerHTML = '';
@@ -509,6 +509,60 @@ function renderRunOverview(run, prevRun = null) {
   const body = document.createElement('div');
   body.className = 'overview-body';
 
+  let selectedPlayer = null;
+  let itemSectionEl = null;
+
+  function renderItemsSection(filterPlayer) {
+    const deltas = run.member_deltas || {};
+    const filtered = filterPlayer
+      ? { [filterPlayer]: deltas[filterPlayer] }
+      : deltas;
+    const itemSummary = buildItemSummary(filtered);
+
+    if (!itemSectionEl) {
+      itemSectionEl = document.createElement('div');
+      itemSectionEl.className = 'overview-section';
+      body.appendChild(itemSectionEl);
+    }
+    itemSectionEl.innerHTML = '';
+
+    const title = filterPlayer
+      ? `Items gained by ${filterPlayer}`
+      : 'Items gained';
+    itemSectionEl.innerHTML = `<div class="overview-section-title">${title}</div>`;
+
+    if (itemSummary.length === 0) {
+      itemSectionEl.innerHTML += '<div class="empty-msg">No item changes.</div>';
+      return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'item-list';
+    for (const item of itemSummary) {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      row.innerHTML = `<span class="item-row-name">${item.name}</span><span class="item-row-count">×${item.total}</span>`;
+      const tipText = item.players.sort((a, b) => b.gain - a.gain).map(p => `${p.name}: +${p.gain}`).join('\n');
+      row.addEventListener('mouseenter', e => showTooltip(e, tipText));
+      row.addEventListener('mousemove', moveTooltip);
+      row.addEventListener('mouseleave', hideTooltip);
+      list.appendChild(row);
+    }
+    itemSectionEl.appendChild(list);
+  }
+
+  function togglePlayer(player, chip) {
+    if (selectedPlayer === player) {
+      selectedPlayer = null;
+      chip.classList.remove('active');
+    } else {
+      document.querySelectorAll('.overview-section .chip.active').forEach(c => c.classList.remove('active'));
+      selectedPlayer = player;
+      chip.classList.add('active');
+    }
+    renderItemsSection(selectedPlayer);
+  }
+
   if (changedPlayers.length > 0) {
     const sec = document.createElement('div');
     sec.className = 'overview-section';
@@ -519,7 +573,7 @@ function renderRunOverview(run, prevRun = null) {
       const chip = document.createElement('span');
       chip.className = 'chip';
       chip.textContent = p;
-      chip.addEventListener('click', () => openMember(p, run.timestamp));
+      chip.addEventListener('click', () => togglePlayer(p, chip));
       chips.appendChild(chip);
     }
     sec.appendChild(chips);
@@ -548,25 +602,7 @@ function renderRunOverview(run, prevRun = null) {
     body.appendChild(sec);
   }
 
-  if (itemSummary.length > 0) {
-    const sec = document.createElement('div');
-    sec.className = 'overview-section';
-    sec.innerHTML = '<div class="overview-section-title">Items gained</div>';
-    const list = document.createElement('div');
-    list.className = 'item-list';
-    for (const item of itemSummary) {
-      const row = document.createElement('div');
-      row.className = 'item-row';
-      row.innerHTML = `<span class="item-row-name">${item.name}</span><span class="item-row-count">×${item.total}</span>`;
-      const tipText = item.players.sort((a, b) => b.gain - a.gain).map(p => `${p.name}: +${p.gain}`).join('\n');
-      row.addEventListener('mouseenter', e => showTooltip(e, tipText));
-      row.addEventListener('mousemove', moveTooltip);
-      row.addEventListener('mouseleave', hideTooltip);
-      list.appendChild(row);
-    }
-    sec.appendChild(list);
-    body.appendChild(sec);
-  }
+  renderItemsSection(null);
 
   panel.appendChild(body);
 }
