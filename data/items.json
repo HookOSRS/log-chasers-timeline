@@ -1566,7 +1566,7 @@
     "30627": "Mystic vigour prayer scroll",
     "30628": "Ice element staff crown",
     "30631": "Fire element staff crown",
-    "30637": "Giantsoul amulet",
+    "30637": "Giantsoul amulet (uncharged)",
     "30640": "Desiccated page",
     "30750": "Oathplate helm",
     "30753": "Oathplate chest",
@@ -1609,7 +1609,7 @@
     "31115": "Eye of ayak (uncharged)",
     "31130": "Dom",
     "31235": "Gryphon feather",
-    "31243": "Horn of plenty (Empty)",
+    "31243": "Horn of plenty (empty)",
     "31245": "Belle's folly (tarnished)",
     "31283": "Soup",
     "31285": "Gull",
@@ -1688,7 +1688,7 @@
     "32867": "Rusty coin",
     "32868": "Broken sextant",
     "32869": "Mouldy doll",
-    "32870": "Smashed Mirror",
+    "32870": "Smashed mirror",
     "32876": "Aquanite tendon",
     "32921": "Jar of feathers",
     "33074": "Facility bottle (empty)",
@@ -1699,5 +1699,10 @@
     "33133": "Pristine spider silk",
     "33143": "Ballistic attractor schematic",
     "33382": "Immaculate mole skin",
-    "33423": "Bosun's workbench schematic"
+    "33423": "Bosun's workbench schematic",
+    "33631": "Crimson kisten",
+    "33634": "Elder venator fang",
+    "33642": "Maggot marquess",
+    "33661": "Venator tooth",
+    "33663": "Venator fang"
 }
