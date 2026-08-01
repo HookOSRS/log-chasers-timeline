@@ -306,8 +306,12 @@
       pointer-events: none;
       z-index: 1000;
       display: none;
-      white-space: pre;
+      max-width: 96vw;
+      gap: 3px 16px;
       box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    }
+    #tooltip .tt-row {
+      white-space: nowrap;
     }
 
     .back-btn {
@@ -480,8 +484,45 @@ function buildItemSummary(memberDeltas) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function showTooltip(e, text) { const t = document.getElementById('tooltip'); t.textContent = text; t.style.display = 'block'; moveTooltip(e); }
-function moveTooltip(e) { const t = document.getElementById('tooltip'); t.style.left = (e.clientX + 14) + 'px'; t.style.top = (e.clientY - 10) + 'px'; }
+function showTooltip(e, lines) {
+  const t = document.getElementById('tooltip');
+  t.innerHTML = lines.map(line => `<div class="tt-row">${line}</div>`).join('');
+  t.style.display = 'grid';
+  t.style.gridAutoFlow = 'column';
+
+  // Lay out as a grid sized to fit the viewport: pick the minimum number of
+  // columns whose height fits the available vertical space, capped by how
+  // many columns actually fit the available horizontal space.
+  const rowEls = [...t.querySelectorAll('.tt-row')];
+  const rowHeight = rowEls[0] ? rowEls[0].getBoundingClientRect().height : 19;
+  const colWidth = Math.min(Math.max(...rowEls.map(el => el.scrollWidth), 60), 220);
+  const gap = 16;
+  const maxHeight = Math.max(200, window.innerHeight * 0.7);
+  const maxWidth = window.innerWidth * 0.92 - 22;
+
+  const maxRowsForHeight = Math.max(1, Math.floor(maxHeight / rowHeight));
+  const maxColsForWidth = Math.max(1, Math.floor((maxWidth + gap) / (colWidth + gap)));
+  const columns = Math.min(maxColsForWidth, Math.max(1, Math.ceil(lines.length / maxRowsForHeight)));
+  const rowsPerColumn = Math.ceil(lines.length / columns);
+
+  t.style.gridTemplateRows = `repeat(${rowsPerColumn}, auto)`;
+  t.style.gridTemplateColumns = `repeat(${columns}, ${colWidth}px)`;
+
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  const t = document.getElementById('tooltip');
+  const pad = 8;
+  const rect = t.getBoundingClientRect();
+  let x = e.clientX + 14;
+  let y = e.clientY - 10;
+  if (x + rect.width > window.innerWidth - pad) x = e.clientX - rect.width - 14;
+  if (x < pad) x = pad;
+  if (y + rect.height > window.innerHeight - pad) y = window.innerHeight - rect.height - pad;
+  if (y < pad) y = pad;
+  t.style.left = x + 'px';
+  t.style.top = y + 'px';
+}
 function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
 
 function renderRunOverview(run, prevRun = null) {
@@ -542,8 +583,8 @@ function renderRunOverview(run, prevRun = null) {
       const row = document.createElement('div');
       row.className = 'item-row';
       row.innerHTML = `<span class="item-row-name">${item.name}</span><span class="item-row-count">×${item.total}</span>`;
-      const tipText = item.players.sort((a, b) => b.gain - a.gain).map(p => `${p.name}: +${p.gain}`).join('\n');
-      row.addEventListener('mouseenter', e => showTooltip(e, tipText));
+      const tipLines = item.players.sort((a, b) => b.gain - a.gain || a.name.localeCompare(b.name)).map(p => `${p.name}: +${p.gain}`);
+      row.addEventListener('mouseenter', e => showTooltip(e, tipLines));
       row.addEventListener('mousemove', moveTooltip);
       row.addEventListener('mouseleave', hideTooltip);
       list.appendChild(row);
@@ -766,8 +807,8 @@ function renderEventDetail(event) {
       const el = document.createElement('div');
       el.className = 'item-row';
       el.innerHTML = `<span class="item-row-name">${row.name}</span><span class="item-row-count">×${row.total}</span>`;
-      const tipText = Object.entries(row.players).sort((a, b) => b[1] - a[1]).map(([p, n]) => `${p}: +${n}`).join('\n');
-      el.addEventListener('mouseenter', e => showTooltip(e, tipText));
+      const tipLines = Object.entries(row.players).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([p, n]) => `${p}: +${n}`);
+      el.addEventListener('mouseenter', e => showTooltip(e, tipLines));
       el.addEventListener('mousemove', moveTooltip);
       el.addEventListener('mouseleave', hideTooltip);
       listEl.appendChild(el);
