@@ -75,6 +75,31 @@ function computeMemberDelta(previousItems, currentItems) {
   return delta;
 }
 
+// Member snapshot files store only changed items per snapshot (new absolute value, 0 if the
+// item dropped out of the source data) instead of the full item map, since collection log
+// counts change on only a small fraction of items day to day.
+function diffChangedItems(previousItems, currentItems) {
+  const delta = {};
+  const allIds = new Set([...Object.keys(previousItems), ...Object.keys(currentItems)]);
+  for (const itemId of allIds) {
+    const prev = previousItems[itemId] || 0;
+    const curr = currentItems[itemId] || 0;
+    if (curr !== prev) delta[itemId] = curr;
+  }
+  return delta;
+}
+
+function reconstructItems(snapshots) {
+  const state = {};
+  for (const snap of snapshots) {
+    for (const [itemId, value] of Object.entries(snap.delta)) {
+      if (value === 0) delete state[itemId];
+      else state[itemId] = value;
+    }
+  }
+  return state;
+}
+
 (async function() {
   const groupId = 2802;
 
@@ -120,19 +145,21 @@ function computeMemberDelta(previousItems, currentItems) {
 
     memberHistory.display_name = member.player_name_with_capitalization || player;
 
-    const previousSnapshot = memberHistory.snapshots[memberHistory.snapshots.length - 1];
+    const hasPrevious = memberHistory.snapshots.length > 0;
+    const previousItems = reconstructItems(memberHistory.snapshots);
 
-    let changed = !previousSnapshot;
-    if (previousSnapshot) {
-      const delta = computeMemberDelta(previousSnapshot.items, member.items);
-      if (Object.keys(delta).length > 0) {
-        memberDeltas[player] = delta;
+    let changed = !hasPrevious;
+    if (hasPrevious) {
+      const gainDelta = computeMemberDelta(previousItems, member.items);
+      if (Object.keys(gainDelta).length > 0) {
+        memberDeltas[player] = gainDelta;
         changed = true;
       }
     }
 
     if (changed) {
-      memberHistory.snapshots.push({ timestamp, items: member.items });
+      const delta = diffChangedItems(previousItems, member.items);
+      memberHistory.snapshots.push({ timestamp, delta });
       fs.writeFileSync(memberPath, JSON.stringify(memberHistory, null, 2));
     }
   }

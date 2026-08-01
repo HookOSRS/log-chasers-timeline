@@ -796,6 +796,20 @@ function aggregateDeltas(eventRuns, fromIdx, toIdx, playerFilter, itemFilter) {
   return result;
 }
 
+// Member snapshot files store only changed items per snapshot (see download.js). Reconstruct
+// the cumulative absolute item map at each snapshot and attach it as `.items` so the rest of
+// the member detail view can keep reading `snapshot.items` unchanged.
+function applyMemberDeltas(memberData) {
+  const state = {};
+  for (const snap of memberData.snapshots) {
+    for (const [itemId, value] of Object.entries(snap.delta || {})) {
+      if (value === 0) delete state[itemId];
+      else state[itemId] = value;
+    }
+    snap.items = { ...state };
+  }
+}
+
 async function openMember(player, targetTimestamp = null) {
   selectedMember = player;
   snapBefore = null;
@@ -814,6 +828,8 @@ async function openMember(player, targetTimestamp = null) {
     panel.innerHTML = '<div class="placeholder">Failed to load member data.</div>';
     return;
   }
+
+  applyMemberDeltas(memberData);
 
   if (targetTimestamp) {
     const idx = memberData.snapshots.findIndex(s => s.timestamp === targetTimestamp);
