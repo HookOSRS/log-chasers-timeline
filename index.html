@@ -747,7 +747,8 @@ function renderEventDetail(event) {
   }
 
   const playerFilter = event.players ? new Set(event.players) : null;
-  const aggregated = aggregateDeltas(eventRuns, 0, eventRuns.length - 1, playerFilter);
+  const itemFilter = event.items ? new Set(event.items.map(String)) : null;
+  const aggregated = aggregateDeltas(eventRuns, 0, eventRuns.length - 1, playerFilter, itemFilter);
 
   const rows = Object.entries(aggregated)
     .map(([itemId, d]) => ({ name: itemNames[itemId] || `Item #${itemId}`, ...d }))
@@ -777,7 +778,7 @@ function renderEventDetail(event) {
   panel.appendChild(area);
 }
 
-function aggregateDeltas(eventRuns, fromIdx, toIdx, playerFilter) {
+function aggregateDeltas(eventRuns, fromIdx, toIdx, playerFilter, itemFilter) {
   const lo = Math.min(fromIdx, toIdx);
   const hi = Math.max(fromIdx, toIdx);
   const result = {};
@@ -785,6 +786,7 @@ function aggregateDeltas(eventRuns, fromIdx, toIdx, playerFilter) {
     for (const [player, deltas] of Object.entries(eventRuns[i].member_deltas || {})) {
       if (playerFilter && !playerFilter.has(player)) continue;
       for (const [itemId, gain] of Object.entries(deltas)) {
+        if (itemFilter && !itemFilter.has(itemId)) continue;
         if (!result[itemId]) result[itemId] = { total: 0, players: {} };
         result[itemId].total += gain;
         result[itemId].players[player] = (result[itemId].players[player] || 0) + gain;
