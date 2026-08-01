@@ -133,7 +133,7 @@ function computeMemberDelta(previousItems, currentItems) {
 
     if (changed) {
       memberHistory.snapshots.push({ timestamp, items: member.items });
-      fs.writeFileSync(memberPath, JSON.stringify(memberHistory));
+      fs.writeFileSync(memberPath, JSON.stringify(memberHistory, null, 2));
     }
   }
 
@@ -141,7 +141,7 @@ function computeMemberDelta(previousItems, currentItems) {
   clanHistory.runs.push(runEntry);
   clanHistory.group_name = groupClogs.group_name;
 
-  fs.writeFileSync(clanHistoryPath, JSON.stringify(clanHistory));
+  fs.writeFileSync(clanHistoryPath, JSON.stringify(clanHistory, null, 2));
 
   console.log(`Saved snapshot ${timestamp}: ${membersAdded.length} added, ${membersRemoved.length} removed, ${Object.keys(memberDeltas).length} members with changes`);
 })();
