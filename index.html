@@ -335,9 +335,9 @@
 <div class="layout">
   <div class="left-panel">
     <div class="tabs">
-      <button class="tab-btn active" id="tab-timeline" onclick="switchTab('timeline')">Timeline</button>
-      <button class="tab-btn" id="tab-members" onclick="switchTab('members')">Members</button>
-      <button class="tab-btn" id="tab-events" onclick="switchTab('events')">Events</button>
+      <button class="tab-btn active" id="tab-timeline" onclick="navigate('#/timeline')">Timeline</button>
+      <button class="tab-btn" id="tab-members" onclick="navigate('#/members')">Members</button>
+      <button class="tab-btn" id="tab-events" onclick="navigate('#/events')">Events</button>
     </div>
     <div class="panel-body" id="panel-body">
       <div class="loading">Loading…</div>
@@ -384,7 +384,7 @@ async function init() {
     `${visibleCount} snapshot${visibleCount !== 1 ? 's' : ''}`;
 
   buildMemberIndex();
-  renderTab();
+  await applyRoute();
 }
 
 function buildMemberIndex() {
@@ -421,13 +421,84 @@ function fmtDate(ts) {
   });
 }
 
-function switchTab(tab) {
-  currentTab = tab;
+function slugify(str) {
+  return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function updateTabButtons(tab) {
   document.getElementById('tab-timeline').classList.toggle('active', tab === 'timeline');
   document.getElementById('tab-members').classList.toggle('active', tab === 'members');
   document.getElementById('tab-events').classList.toggle('active', tab === 'events');
-  renderTab();
 }
+
+function parseRoute() {
+  const raw = location.hash.replace(/^#\/?/, '');
+  const parts = raw.split('/').filter(Boolean).map(decodeURIComponent);
+
+  if (parts[0] === 'snapshot' && parts[1]) return { tab: 'timeline', snapshot: parts[1] };
+  if (parts[0] === 'member' && parts[1]) return { tab: 'members', member: parts[1], memberTs: parts[2] || null };
+  if (parts[0] === 'event' && parts[1]) return { tab: 'events', eventSlug: parts[1] };
+  if (parts[0] === 'members') return { tab: 'members' };
+  if (parts[0] === 'events') return { tab: 'events' };
+  return { tab: 'timeline' };
+}
+
+function navigate(path) {
+  const normalized = path.startsWith('#') ? path : `#${path}`;
+  if (location.hash === normalized) applyRoute();
+  else location.hash = normalized;
+}
+
+function resetRightPanel() {
+  document.getElementById('right-panel').innerHTML =
+    '<div class="placeholder">Select a snapshot or member to get started</div>';
+}
+
+async function applyRoute() {
+  if (!clanHistory) return;
+  const route = parseRoute();
+
+  currentTab = route.tab;
+  updateTabButtons(currentTab);
+  renderTab();
+
+  if (route.snapshot) {
+    const idx = clanHistory.runs.findIndex(r => r.timestamp === route.snapshot);
+    if (idx === -1) {
+      document.getElementById('right-panel').innerHTML =
+        '<div class="placeholder">Snapshot not found.</div>';
+      return;
+    }
+    const run = clanHistory.runs[idx];
+    const prevRun = idx > 0 ? clanHistory.runs[idx - 1] : null;
+    renderRunOverview(run, prevRun);
+    const entry = document.querySelector(`.run-entry[data-ts="${CSS.escape(run.timestamp)}"]`);
+    if (entry) {
+      document.querySelectorAll('.run-entry').forEach(el => el.classList.remove('active'));
+      entry.classList.add('active');
+    }
+  } else if (route.member) {
+    await openMember(route.member, route.memberTs);
+  } else if (route.eventSlug) {
+    await loadEvents();
+    const ev = eventsData && eventsData._slugIndex[route.eventSlug];
+    if (!ev) {
+      document.getElementById('right-panel').innerHTML =
+        '<div class="placeholder">Event not found.</div>';
+      return;
+    }
+    renderEventDetail(ev);
+    const row = document.querySelector(`.member-row[data-slug="${CSS.escape(route.eventSlug)}"]`);
+    if (row) {
+      document.querySelectorAll('#panel-body .member-row').forEach(el => el.classList.remove('active'));
+      row.classList.add('active');
+    }
+  } else {
+    resetRightPanel();
+  }
+}
+
+window.addEventListener('hashchange', applyRoute);
 
 function renderTab() {
   if (currentTab === 'timeline') renderTimeline();
@@ -460,9 +531,7 @@ function renderTimeline() {
     `;
 
     header.addEventListener('click', () => {
-      document.querySelectorAll('.run-entry').forEach(el => el.classList.remove('active'));
-      entry.classList.add('active');
-      renderRunOverview(run, prevRun);
+      navigate('#/snapshot/' + encodeURIComponent(run.timestamp));
     });
 
     entry.appendChild(header);
@@ -635,7 +704,7 @@ function renderRunOverview(run, prevRun = null) {
       const chip = document.createElement('span');
       chip.className = 'chip';
       chip.textContent = p;
-      if (clickable) chip.addEventListener('click', () => openMember(p));
+      if (clickable) chip.addEventListener('click', () => navigate('#/member/' + encodeURIComponent(p)));
       else chip.style.cursor = 'default';
       chips.appendChild(chip);
     }
@@ -694,35 +763,59 @@ function renderMemberRows(container) {
   for (const player of players) {
     const row = document.createElement('div');
     row.className = 'member-row' + (selectedMember === player ? ' active' : '');
+    row.dataset.name = player;
     row.innerHTML = `
       <span class="member-row-name">${player}</span>
       <span class="member-row-date">${memberIndex[player].lastActive ? fmtDate(memberIndex[player].lastActive) : '—'}</span>
     `;
-    row.addEventListener('click', () => openMember(player));
+    row.addEventListener('click', () => navigate('#/member/' + encodeURIComponent(player)));
     container.appendChild(row);
   }
+}
+
+async function loadEvents() {
+  if (eventsData) return eventsData;
+  const data = await fetch(`data/events.json?v=${Date.now()}`).then(r => r.json());
+  const slugIndex = {};
+  const seen = {};
+  for (const event of data.events) {
+    const base = slugify(event.name);
+    let slug = base;
+    let n = 2;
+    while (slugIndex[slug]) slug = `${base}-${n++}`;
+    slugIndex[slug] = event;
+    seen[event.name] = slug;
+  }
+  data._slugIndex = slugIndex;
+  data._slugByEvent = seen;
+  eventsData = data;
+  return eventsData;
+}
+
+function getEventSlug(event) {
+  return eventsData && eventsData._slugByEvent[event.name];
 }
 
 async function renderEventsList() {
   const body = document.getElementById('panel-body');
   body.innerHTML = '<div class="loading">Loading…</div>';
-  if (!eventsData) {
-    try {
-      eventsData = await fetch(`data/events.json?v=${Date.now()}`).then(r => r.json());
-    } catch {
-      body.innerHTML = '<div class="loading">Failed to load events.</div>';
-      return;
-    }
+  try {
+    await loadEvents();
+  } catch {
+    body.innerHTML = '<div class="loading">Failed to load events.</div>';
+    return;
   }
   body.innerHTML = '';
   for (const event of eventsData.events) {
+    const slug = getEventSlug(event);
     const row = document.createElement('div');
     row.className = 'member-row';
+    row.dataset.slug = slug;
     row.innerHTML = `
       <span class="member-row-name">${event.name}</span>
       <span class="member-row-date">${fmtShortDate(event.start)} – ${fmtShortDate(event.end)}</span>
     `;
-    row.addEventListener('click', () => renderEventDetail(event));
+    row.addEventListener('click', () => navigate('#/event/' + slug));
     body.appendChild(row);
   }
 }
@@ -888,7 +981,7 @@ async function openMember(player, targetTimestamp = null) {
 
   if (currentTab === 'members') {
     document.querySelectorAll('.member-row').forEach(el => {
-      el.classList.toggle('active', el.querySelector('.member-row-name').textContent === player);
+      el.classList.toggle('active', el.dataset.name === player);
     });
   }
 
@@ -909,7 +1002,7 @@ function renderDetail() {
 
   panel.innerHTML = `
     <div class="detail-header">
-      ${currentRun ? `<button class="back-btn" onclick="renderRunOverview(currentRun, currentPrevRun)">← Overview</button>` : ''}
+      ${currentRun ? `<button class="back-btn" onclick="navigate('#/snapshot/' + encodeURIComponent(currentRun.timestamp))">← Overview</button>` : ''}
       <h2>${displayName}</h2>
       <div class="detail-meta">${snaps.length} snapshot${snaps.length !== 1 ? 's' : ''} · select Before and After to compare</div>
     </div>
