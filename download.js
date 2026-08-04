@@ -147,14 +147,20 @@ function reconstructItems(snapshots) {
 
     const hasPrevious = memberHistory.snapshots.length > 0;
     const previousItems = reconstructItems(memberHistory.snapshots);
+    const hasBaseline = Object.keys(previousItems).length > 0;
 
     let changed = !hasPrevious;
-    if (hasPrevious) {
+    if (hasPrevious && hasBaseline) {
       const gainDelta = computeMemberDelta(previousItems, member.items);
       if (Object.keys(gainDelta).length > 0) {
         memberDeltas[player] = gainDelta;
         changed = true;
       }
+    } else if (hasPrevious) {
+      // We've tracked this player before but never recorded any items for them —
+      // their collection log likely wasn't public/synced on TempleOSRS until now.
+      // Record the newly-visible items as a baseline instead of a burst of "gains".
+      changed = Object.keys(member.items).length > 0;
     }
 
     if (changed) {
