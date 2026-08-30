@@ -1,6 +1,6 @@
 {
   "player": "Chiefy",
-  "display_name": "Chiefy",
+  "display_name": "chiefy",
   "snapshots": [
     {
       "timestamp": "2026-06-18T20-00-49",
@@ -1543,6 +1543,12 @@
         "28936": 5,
         "28942": 14,
         "28947": 94
+      }
+    },
+    {
+      "timestamp": "2026-08-30T00-00-24",
+      "delta": {
+        "34033": 10
       }
     }
   ]
